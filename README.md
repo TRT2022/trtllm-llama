@@ -8,7 +8,7 @@
 [![](https://img.shields.io/badge/%E9%98%BF%E9%87%8C%E5%A4%A9%E6%B1%A0-TensorRT%20Hackathon%202023-blue)](https://tianchi.aliyun.com/competition/entrance/532108/introduction?spm=a2c22.12281957.0.0.4c885d9bOexwJc)
 [![](https://img.shields.io/badge/NVIDIA-TensorRT%20CookBook%20CN-blue)](https://github.com/NVIDIA/trt-samples-for-hackathon-cn)
 [![](https://img.shields.io/badge/B%E7%AB%99-GodV%20TensorRT%E6%95%99%E7%A8%8B-blue)]([https://www.bilibili.com/video/BV1jj411Z7wG/](https://www.bilibili.com/video/BV1jj411Z7wG/?spm=a2c22.12281978.0.0.49ed2274CQCrY7))
-[![](https://img.shields.io/badge/B%E7%AB%99-%20%E5%88%9D%E8%B5%9B%E6%80%BB%E7%BB%93-blue)](https://www.bilibili.com/video/BV1i3411G7vN?spm_id_from=333.999.0.0&vd_source=def8c63d9c5f9bf987870bf827bfcb3d)
+[![](https://img.shields.io/badge/Github-%20%E5%88%9D%E8%B5%9B%E6%80%BB%E7%BB%93-blue)](https://github.com/TRT2022/ControlNet_TensorRT)
 [![](https://img.shields.io/badge/Github-LLaMa-blue)](https://github.com/facebookresearch/llama)
 
 
