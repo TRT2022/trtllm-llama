@@ -227,8 +227,26 @@ python3 summarize.py --engine_dir trt_engine/gpt2/fp16/1-gpu \
 执行上述代码，结果如下：
 
 ```
-
+[08/24/2023-08:40:54] [TRT-LLM] [I] ---------------------------------------------------------
+Downloading builder script: 5.60kB [00:00, 6.22MB/s]
+Token indices sequence length is longer than the specified maximum sequence length for this model (1151 > 1024). Running this sequence through the model will result in indexing errors
+[08/24/2023-08:41:14] [TRT-LLM] [I] TensorRT-LLM (total latency: 2.6481666564941406 sec)
+[08/24/2023-08:41:14] [TRT-LLM] [I] TensorRT-LLM beam 0 result
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rouge1 : 15.361040799540035
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rouge2 : 3.854022269668396
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rougeL : 12.078455591738333
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rougeLsum : 13.547802733617264
+[08/24/2023-08:41:14] [TRT-LLM] [I] Hugging Face (total latency: 10.39808702468872 sec)
+[08/24/2023-08:41:14] [TRT-LLM] [I] HF beam 0 result
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rouge1 : 14.75593024343394
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rouge2 : 3.3647470801871733
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rougeL : 11.124766996533
+[08/24/2023-08:41:14] [TRT-LLM] [I]   rougeLsum : 13.031128048110618
 ```
+
+<div align=center>
+<img src="./assets/section5/p3.png"/>
+</div>
 
 问题2解析完成。
 
