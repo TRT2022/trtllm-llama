@@ -76,7 +76,7 @@ ToDo：
 
 针对于LLaMA-7B我们的优化过程主要分以下3个部分：
 + 1.初步运行`examples/llama`项目
-+ 2.nsight system分析逐步添加feature进行消融实验
++ 2.nsight systerm分析逐步添加feature进行消融实验
 + 3.新featute实现：inflight batching 和 smoothquant
 
 每一部分我们提供了详细的运行脚本和测试结果。
@@ -93,7 +93,7 @@ LlaMA-7B v1 (meta checkpoint)模型下载地址： <https://115.com/s/sw6a2kv3w4
 
 ```shell
 # cd到目标路径
-cd cd ./tensorrt_llm_july-release-v1/examples/llama
+cd ./tensorrt_llm_july-release-v1/examples/llama
 # 模型转HF checkpoint
 python3 /usr/local/lib/python3.8/dist-packages/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir ./llama-1-7b-meta --model_size 7B --output_dir ./tmp/llama/7B
 ```
@@ -167,7 +167,7 @@ python3 summarize.py --test_hf \
 
 ##### 2.2.2 nsight system分析逐步添加feature进行消融实验
 
-该部分我们做了详细的消融实验，通过逐步添加feature和trick的方式验证不同feature在LLaMA-7B上的延时的收益，并基于nsight system进行profiling。
+该部分我们做了详细的消融实验，通过逐步添加feature和trick的方式验证不同feature在LLaMA-7B上的Latency的收益，并基于nsight system进行profiling。
 
 目前`examples/llama`的feature支持情况如下图所示：
 
@@ -211,19 +211,36 @@ llama-hf-run (mean latency: 1.7185083055496215 sec)
 ```
 上述结果显示，添加`k/v cache + attention plugin`后的TensorRT LLaMA的平均推断延时为`1.40416秒`，而HF下平均推断延时为`1.71851秒`,加速比为`1.224`
 
-分析导出的`trt_llm_only_kv_cache_fp16` nsys文件，可以清楚的看到attention plugin和k/v cache的推理延时情况：
+分析导出的`trt_llm_only_kv_cache_fp16` nsys文件，可以清楚的看到attention plugin和k/v cache以及矩阵乘的推理延时情况如下所示：
 
-ToDo
++ attention plugin profiling的耗时情况
+<div align=center>
+<img src="./assets/kv_cache_fp16/attention_1.png"/>
+</div>
 
-2. 添加: k/v cache + attention_plugin + weight_only_quant
++ k/v cache profiling的耗时情况
+
+<div align=center>
+<img src="./assets/kv_cache_fp16/kvcache.png"/>
+</div>
+
++ 带权重的矩阵乘的profiling的耗时情况
+
+<div align=center>
+<img src="./assets/kv_cache_fp16/matrix_multiply_0.png"/>
+</div>
+
+可以看到在FP16下，attention plugin的latency为$13.576\mu s$,k/v cache的latency为$925.928\mu s$,带权重的矩阵乘的latency为$45.922\mu s$
+
+2. 添加: int8 k/v cache + attention_plugin + weight_only_quant
 
 + build engine
 
 ```shell
-python build.py --model_dir ./tmp/llama/7B/ \
+python3 build.py --model_dir ./tmp/llama/7B/ \
                 --dtype float16 \
-                --use_weight_only \
-                --output_dir ./tmp/llama/7B/trt_engines/weight_only/1-gpu/
+                --use_int8_kv_cache \
+                --output_dir ./tmp/llama/7B/trt_engines/int8_kvcache/1-gpu/
 ```
 
 + nsight system profiling及latency统计
@@ -242,39 +259,29 @@ llama-run (mean latency: 0.7849386262893677 sec)
 ```
 上述结果显示，添加`k/v cache + attention plugin + weight_only_quant`后的TensorRT LLaMA的平均推断延时为`0.78494秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.189`
 
-ToDo nsys
+分析`trt_llm_weight_only`nsys文件，可以清楚的看到attention plugin和int8 k/v cache以及矩阵乘的推理延时情况如下所示：
 
-3. 添加: int8 k/v cache + attention_plugin + weight_only_quant 
++ attention plugin profiling的耗时情况
+<div align=center>
+<img src="./assets/weight_only_quant/attention.png"/>
+</div>
 
-+ build engine
++ int8 k/v cache profiling的耗时情况
 
-```shell
-python3 build.py --model_dir ./tmp/llama/7B/ \
-                --dtype float16 \
-                --use_int8_kv_cache \
-                --output_dir ./tmp/llama/7B/trt_engines/int8_kvcache/1-gpu/
+<div align=center>
+<img src="./assets/weight_only_quant/kvcache.png"/>
+</div>
 
-```
++ 带权重的矩阵乘的profiling的耗时情况
 
-+ nsight system profiling及latency统计
+<div align=center>
+<img src="./assets/weight_only_quant/matmul.png"/>
+</div>
 
-```shell
-nsys profile -o trt_llm_weight_only_int8_kvcache python3 run.py --max_output_len=50 \
-               --tokenizer_dir ./tmp/llama/7B/ \
-               --engine_dir=./tmp/llama/7B/trt_engines/int8_kvcache/1-gpu/
-```
+可以看到在weight only quant下，attention plugin的latency为$17.837\mu s$,int8 K/V cache的latency为$443.055\mu s$,带权重的矩阵乘的latency为$7.107\mu s$。对比上述FP16的情况有明显的加速效果。
 
-得到结果：
 
-```
-# TensorRT-LLM 
-llama-run (mean latency: 0.7858470821380615 sec)
-```
-上述结果显示，添加`int8 k/v cache + attention plugin + weight_only_quant`后的TensorRT LLaMA的平均推断延时为`0.78585秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.187`
-
-ToDo nsys
-
-4. 添加: k/v-cache + attention plugin + weight_only_quant + gemm plugin
+3. 添加: int8 k/v-cache + attention plugin + weight_only_quant + gemm plugin
 
 + build engine
 
@@ -288,6 +295,7 @@ python3 build.py --model_dir ./tmp/llama/7B/ \
                 --output_dir ./tmp/llama/7B/trt_engines/weight_only_attention_gemm/1-gpu/
 
 ```
++ nsight system profiling及latency统计
 
 ```shell
 nsys profile -o trt_llm_weight_only_attention_gemm python3 run.py --max_output_len=50 \
@@ -304,7 +312,85 @@ llama-run (mean latency: 0.7930449199676514 sec)
 ```
 上述结果显示，添加`int8 k/v cache + attention plugin + weight_only_quant + gemm plugin`后的TensorRT LLaMA的平均推断延时为`0.79304秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.167`
 
+分析`trt_llm_weight_only_attention_gemm`nsys文件，可以清楚的看到gemm在使用plugin前后的推理延时情况如下所示：
 
++ gemm plugin前 profiling的耗时情况
+
+<div align=center>
+<img src="./assets/gemm/gemm_origin_5.png"/>
+</div>
+
++  gemm plugin前 profiling的耗时情况
+
+<div align=center>
+<img src="./assets/gemm/gemm_5.png"/>
+</div>
+
+可以明显看到替换gemm plugin的前后变化，gemm plugin替换前的latency为$28.286\mu s$,gemm plugin替换后的latency为$26.241\mu s$,有一定的加速效果。
+
+4. int4
+
++ build engine
+
+```shell
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_gpt_attention_plugin float16 \
+                --use_gemm_plugin float16 \
+                --use_weight_only \
+                --weight_only_precision int4 \
+                --output_dir ./tmp/llama/7B/trt_engines/int4/1-gpu/
+
+```
++ nsight system profiling及latency统计
+
+```shell
+nsys profile -o trt_llm__int4 python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/int4/1-gpu/
+```
+
+得到结果：
+
+```
+# TensorRT-LLM 
+llama-run (mean latency: 0.48769086837768555 sec)
+```
+
+上述结果显示，添加`int4`后的TensorRT LLaMA的平均推断延时为`0.48769秒`，而HF下平均推断延时为`1.71851秒`,加速比为`3.524`
+
+分析`trt_llm__int4`nsys文件，可以清楚的看到attention plugin和k/v cache推理延时情况如下所示：
+
++ attention plugin profiling的耗时情况
+<div align=center>
+<img src="./assets/int4/attention.png"/>
+</div>
+
++ k/v cache profiling的耗时情况
+
+<div align=center>
+<img src="./assets/int4/kvcache.png"/>
+</div>
+
+可以看到在int4下，attention plugin的latency为$11.609\mu s$,K/V cache的latency为$159.717\mu s$
+
+综上基于上述分析结果，总结如下：
+<div align=center>
+
+|Feature|原Llama是否实现|本项目是否启用|加速比|
+|-|-|-|-|
+| K/V cache|✔️|✔️|-|
+|+Attention Plugin|✔️|✔️|1.224|
+|+Int8 K/V cache|✔️|✔️|-|
+|+Weight Only Quant|✔️|✔️|2.189|
+|+Gemm Plugin|✔️|✔️|2.167|
+|+Int4|✔️|✔️|3.524|
+|Inflight Batching|❌|-|-|
+|SmoothQuant|❌|-|-|
+
+</div>
+
+⚠️注意：我们将在Section3-优化效果的第一部分提供现有feature下的加速效果和精度对比。
 
 #### 2.2.3 新featute实现：inflight batching 和 smoothquant
 
