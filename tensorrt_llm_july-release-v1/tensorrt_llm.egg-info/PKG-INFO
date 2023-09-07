@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: tensorrt-llm
+Version: 0.1.3
+Summary: TensorRT-LLM: A TensorRT Toolbox for Large Language Models
+License: UNKNOWN
+Platform: UNKNOWN
+Requires-Python: >=3.7, <4
+License-File: LICENSE
+
+UNKNOWN

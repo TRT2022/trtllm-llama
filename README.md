@@ -1,15 +1,15 @@
 <!-- <img src="docs/logo.png" align="right" alt="logo" height="180"  /> -->
 <img src="assets/trt2023.jpeg" align="center" alt="logo"  />
 
-## 基于TensorRT-LLM的LLaMa模型优化方案 :zap:
-### LLaMa: Open and Efficient Foundation Language Models for TensorRT Hackathon 2023 <img src="assets/llama.png" alt="logo"  width=4%/>
+## 基于TensorRT-LLM的LLaMA模型优化方案 :zap:
+### LLaMA: Open and Efficient Foundation Language Models for TensorRT Hackathon 2023 <img src="assets/llama.png" alt="logo"  width=4%/>
 
 [![](https://img.shields.io/badge/Github-TensorRT-blue)](https://github.com/NVIDIA/TensorRT)
 [![](https://img.shields.io/badge/%E9%98%BF%E9%87%8C%E5%A4%A9%E6%B1%A0-TensorRT%20Hackathon%202023-blue)](https://tianchi.aliyun.com/competition/entrance/532108/introduction?spm=a2c22.12281957.0.0.4c885d9bOexwJc)
 [![](https://img.shields.io/badge/NVIDIA-TensorRT%20CookBook%20CN-blue)](https://github.com/NVIDIA/trt-samples-for-hackathon-cn)
 [![](https://img.shields.io/badge/B%E7%AB%99-GodV%20TensorRT%E6%95%99%E7%A8%8B-blue)](https://www.bilibili.com/video/BV1jj411Z7wG/?spm=a2c22.12281978.0.0.49ed2274CQCrY7)
 [![](https://img.shields.io/badge/Github-%20%E5%88%9D%E8%B5%9B%E6%80%BB%E7%BB%93-blue)](https://github.com/TRT2022/ControlNet_TensorRT)
-[![](https://img.shields.io/badge/Github-LLaMa-blue)](https://github.com/facebookresearch/llama)
+[![](https://img.shields.io/badge/Github-LLaMA-blue)](https://github.com/facebookresearch/llama)
 
 
 :alien: : **美迪康-北航AI Lab** 
@@ -20,9 +20,11 @@
 
 |时间点|提交内容|说明|
 |-|-|-|
-|2023-08-21|和NVIDIA导师团队确定优化方案：基于开源LLM的LLaMa模型推断加速优化|选题|
+|2023-08-21|和NVIDIA导师团队确定优化方案：基于开源LLM的LLaMA模型推断加速优化|选题|
 |2023-08-22|创建Github项目                                              |项目创建|
 |2023-08-24|完成送分题作答                                               |送分题 |
+|2023-08-31|examples/llama源码学习                                       |项目分析 |
+|2023-09-3|正常运行examples/llama                                     |代码运行测试 |
 
 
 ☣️复赛调优阶段：2023年8月17日-9月21日
@@ -32,19 +34,25 @@
 ### 1.总述
 ---
 
-作为 [NVIDIA TensorRT Hackathon 2023](https://github.com/NVIDIA/trt-samples-for-hackathon-cn/tree/master/Hackathon2023) 的复赛参赛题目，本工作基于TensorRT-LLM优化大语言模型LLaMa。按照参赛要求本项目选择完成**TensorRT-LLM试用送分题**以及**3+4模式的TensorRT-LLM模型优化方案**，即：
+作为 [NVIDIA TensorRT Hackathon 2023](https://github.com/NVIDIA/trt-samples-for-hackathon-cn/tree/master/Hackathon2023) 的复赛参赛题目，本工作基于TensorRT-LLM优化大语言模型LLaMA。按照参赛要求本项目选择完成**TensorRT-LLM试用送分题**以及**3+4模式的TensorRT-LLM模型优化方案**，即：
 + 3：用TensorRT-LLM优化examples目录下的某个现有模型（本项目优化`examples/llama`模型）
-+ 4: 尝试为TensorRT-LLM添加新feature，或者在模型上启用了现有feature
++ 4：尝试为TensorRT-LLM添加新feature，或者在模型上启用了现有feature
 
 下面我们将从模型介绍，优化效果及如何运行该项目等3个方面介绍本项目
 
-首先是LLaMa模型的相关介绍，[LLaMA](https://github.com/facebookresearch/llama) 是目前为止，效果最好的开源 LLM 之一,数据集层面上共有1.4T的Tokens,tokenizer使用byte pair encoding (BPE) 算法，Sentence-Piece的实现,所有数字被拆分为单独的digit，所有未知的UTF-8 字符，回退到字节来进行分解。因此，LLaMA 可以通过byte 的方式，构造出很多不在 vocab 中的字符，从而也具有较好的多语言能力。网络结构上的改进基于Transformer的架构，并做了如下3点改进：
+首先是LLaMA模型的相关介绍，[LLaMA](https://github.com/facebookresearch/llama) 是目前为止，效果最好的开源 LLM 之一,数据集层面上共有1.4T的Tokens, tokenizer使用byte pair encoding (BPE) 算法，Sentence-Piece的实现,所有数字被拆分为单独的digit，所有未知的UTF-8 字符，回退到字节来进行分解。因此，LLaMA 可以通过byte 的方式，构造出很多不在 vocab 中的字符，从而也具有较好的多语言能力。网络结构上的改进基于Transformer的架构，并做了如下3点改进：
 + Pre-Normalization：为了提高训练的稳定性，对每个transformer层的输入进行归一化，而不是输出进行归一化（使用 RMS Norm 归一化函数）
 + SwiGLU：使用SwiGLU替代了ReLU作为激活函数。和PaLM中不同，维度采用$\frac{2}{3}4d$而不是$4d$  
-+ RoPE: 采用旋转位置编码，使得大模型的生成有更好的外推性
++ RoPE：采用旋转位置编码，使得大模型的生成有更好的外推性
 
-LLaMA-13B 优于 GPT-3，尽管只有1/10大小。 LLaMA-65B 是可以与 Chinchilla-70B 和 PaLM-540B 这种最佳的LLM相竞争的模型。经过微调之后，LLaMA的效果有显著的提升。关于LLaMa的介绍，推荐知乎文章：
+LLaMA-13B 优于 GPT-3，尽管只有1/10大小。 LLaMA-65B 是可以与 Chinchilla-70B 和 PaLM-540B 这种最佳的LLM相竞争的模型。经过微调之后，LLaMA的效果有显著的提升。关于LLaMA的介绍，推荐知乎文章：
 + [LLaMA 超详细解读（paper & code）](https://zhuanlan.zhihu.com/p/632102048?utm_id=0)
+
+针对于LLaMA-7B和TensorRT-LLM下的`examples/llama`,我们的优化方案计划实现过程如下图所示：
+
+<div align=center>
+<img src="./assets/TensorRT-LLM LLaMa进度图.png"/>
+</div>
 
 ToDo：
 - 优化效果（例如给出精度和加速比），简单给出关键的数字即可，在这里不必详细展开
@@ -57,11 +65,251 @@ ToDo：
 
 #### 2.1 开发工作的难点
 
-ToDo
+该模型的优化难点如下：
+
++ 对于TensorRT-LLM相关功能和API不熟悉
++ `examples/llama`中已经实现了多数的feature，在此基础上进一步的优化难度较大
+
+但是，LLaMA作为相对较早的开源大语言模型，其直接影响了国内外大模型的发展和研发思路，其重要性不言而喻，针对于LLaMA的TensorRT-LLM模型优化意义重大。
 
 #### 2.2 开发与优化过程
 
+针对于LLaMA-7B我们的优化过程主要分以下3个部分：
++ 1.初步运行`examples/llama`项目
++ 2.nsight system分析逐步添加feature进行消融实验
++ 3.新featute实现：inflight batching 和 smoothquant
+
+每一部分我们提供了详细的运行脚本和测试结果。
+
+##### 2.2.1 初步运行`examples/llama`项目
+
+0. 准备LLaMA-7B meta checkpoint模型
+
++ 下载模型
+
+LlaMA-7B v1 (meta checkpoint)模型下载地址： <https://115.com/s/sw6a2kv3w4z?password=a835&#>,将下载后的模型存放在`/tensorrt_llm_july-release-v1/examples/llama/llama-1-7b-meta/`下
+
++ meta checkpoint 转 huggingface(HF) checkpoint
+
+```shell
+# cd到目标路径
+cd cd ./tensorrt_llm_july-release-v1/examples/llama
+# 模型转HF checkpoint
+python3 /usr/local/lib/python3.8/dist-packages/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir ./llama-1-7b-meta --model_size 7B --output_dir ./tmp/llama/7B
+```
+
+1. 构建TensorRT-LLM engine
+
+```shell
+# 不加入任何trick
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --output_dir ./tmp/llama/7B/trt_engines/fp16/1-gpu \
+                --visualize
+
+# 加入plugin
+python build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_gpt_attention_plugin float16 \
+                --use_gemm_plugin float16 \
+                --output_dir ./tmp/llama/7B/trt_engines/fp16/1-gpu/
+```
+
+2. 运行engine
+
+```shell
+python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/fp16/1-gpu/
+```
+
+3. 使用LLaMA-7B测试文本摘要任务
+
+```shell
+# 使用TensorRT-LLM engine测试
+python3 summarize.py --test_trt_llm \
+                    --hf_model_location ./tmp/llama/7B/ \
+                    --data_type fp16 \
+                    --engine_dir ./tmp/llama/7B/trt_engines/fp16/1-gpu/
+```
+结果：
+
+```
+[09/03/2023-13:56:21] [TRT-LLM] [I] ---------------------------------------------------------
+[09/03/2023-13:57:32] [TRT-LLM] [I] TensorRT-LLM (total latency: 65.88509821891785 sec)
+[09/03/2023-13:57:32] [TRT-LLM] [I] TensorRT-LLM beam 0 result
+[09/03/2023-13:57:32] [TRT-LLM] [I]   rouge1 : 19.478572394974464
+[09/03/2023-13:57:32] [TRT-LLM] [I]   rouge2 : 5.748473587185184
+[09/03/2023-13:57:32] [TRT-LLM] [I]   rougeL : 14.488586709461371
+[09/03/2023-13:57:32] [TRT-LLM] [I]   rougeLsum : 17.818188740969955
+```
+
+```shell
+# 使用HF模型测试
+python3 summarize.py --test_hf \
+                    --hf_model_location ./tmp/llama/7B/ \
+                    --data_type fp16 
+```
+
+结果：
+
+```
+[09/03/2023-14:02:07] [TRT-LLM] [I] ---------------------------------------------------------
+[09/03/2023-14:03:30] [TRT-LLM] [I] Hugging Face (total latency: 78.22841620445251 sec)
+[09/03/2023-14:03:30] [TRT-LLM] [I] HF beam 0 result
+[09/03/2023-14:03:30] [TRT-LLM] [I]   rouge1 : 20.106338916310662
+[09/03/2023-14:03:30] [TRT-LLM] [I]   rouge2 : 5.910110463256421
+[09/03/2023-14:03:30] [TRT-LLM] [I]   rougeL : 15.2269090887293
+[09/03/2023-14:03:30] [TRT-LLM] [I]   rougeLsum : 17.938095329383458
+```
+
+我们初步正常运行了`example/llama`,从结果上初步验证了正确性。
+
+##### 2.2.2 nsight system分析逐步添加feature进行消融实验
+
+该部分我们做了详细的消融实验，通过逐步添加feature和trick的方式验证不同feature在LLaMA-7B上的延时的收益，并基于nsight system进行profiling。
+
+目前`examples/llama`的feature支持情况如下图所示：
+
+<div align=center>
+<img src="./assets/TensorRT_LLM LLaMa.png"/>
+</div>
+
+由于LLaMA-7B中使用了RoPE,目前`gpt_attention_plugin`是唯一的一种支持RoPE的方式，因此LLaMA在TensorRT-LLM中强制使用了`gpt_attention_plugin`
+
+1. 添加: k/v cache + attention pligin
+
++ build engine
+
+```shell
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --output_dir ./tmp/llama/7B/trt_engines/fp16/1-gpu \
+```
+
++ nsight system profiling及latency统计
+
+```shell
+# 运行engine
+nsys profile -o trt_llm_only_kv_cache_fp16 python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/fp16/1-gpu/
+
+# 运行HF checkpoint
+python3 run_hf.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --hf_model_location ./tmp/llama/7B/
+```
+
+得到结果：
+
+```
+# TensorRT-LLM 
+llama-run (mean latency: 1.404158673286438 sec)
+# HF
+llama-hf-run (mean latency: 1.7185083055496215 sec)
+```
+上述结果显示，添加`k/v cache + attention plugin`后的TensorRT LLaMA的平均推断延时为`1.40416秒`，而HF下平均推断延时为`1.71851秒`,加速比为`1.224`
+
+分析导出的`trt_llm_only_kv_cache_fp16` nsys文件，可以清楚的看到attention plugin和k/v cache的推理延时情况：
+
 ToDo
+
+2. 添加: k/v cache + attention_plugin + weight_only_quant
+
++ build engine
+
+```shell
+python build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_weight_only \
+                --output_dir ./tmp/llama/7B/trt_engines/weight_only/1-gpu/
+```
+
++ nsight system profiling及latency统计
+
+```shell
+nsys profile -o trt_llm_weight_only python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/weight_only/1-gpu/
+```
+
+得到结果：
+
+```
+# TensorRT-LLM 
+llama-run (mean latency: 0.7849386262893677 sec)
+```
+上述结果显示，添加`k/v cache + attention plugin + weight_only_quant`后的TensorRT LLaMA的平均推断延时为`0.78494秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.189`
+
+ToDo nsys
+
+3. 添加: int8 k/v cache + attention_plugin + weight_only_quant 
+
++ build engine
+
+```shell
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_int8_kv_cache \
+                --output_dir ./tmp/llama/7B/trt_engines/int8_kvcache/1-gpu/
+
+```
+
++ nsight system profiling及latency统计
+
+```shell
+nsys profile -o trt_llm_weight_only_int8_kvcache python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/int8_kvcache/1-gpu/
+```
+
+得到结果：
+
+```
+# TensorRT-LLM 
+llama-run (mean latency: 0.7858470821380615 sec)
+```
+上述结果显示，添加`int8 k/v cache + attention plugin + weight_only_quant`后的TensorRT LLaMA的平均推断延时为`0.78585秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.187`
+
+ToDo nsys
+
+4. 添加: k/v-cache + attention plugin + weight_only_quant + gemm plugin
+
++ build engine
+
+```shell
+
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_gpt_attention_plugin float16 \
+                --use_gemm_plugin float16 \
+                --use_weight_only \
+                --output_dir ./tmp/llama/7B/trt_engines/weight_only_attention_gemm/1-gpu/
+
+```
+
+```shell
+nsys profile -o trt_llm_weight_only_attention_gemm python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/weight_only_attention_gemm/1-gpu/
+
+```
+
+得到结果：
+
+```
+# TensorRT-LLM 
+llama-run (mean latency: 0.7930449199676514 sec)
+```
+上述结果显示，添加`int8 k/v cache + attention plugin + weight_only_quant + gemm plugin`后的TensorRT LLaMA的平均推断延时为`0.79304秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.167`
+
+
+
+#### 2.2.3 新featute实现：inflight batching 和 smoothquant
+
+ToDo
+
 
 ### 3.优化效果
 ---
@@ -75,8 +323,7 @@ ToDo
 
 |:bug: Bug名称|Issue|是否被官方确认|说明|
 |-|-|:-:|-|
-|InstanceNormalization Plugin |<https://github.com/NVIDIA/TensorRT/issues/3165>|❎|官方暂未确认|
-
+|InstanceNormalization Plugin |<https://github.com/NVIDIA/TensorRT/issues/3165>||官方暂未确认|
 
 </div>
 
@@ -293,5 +540,7 @@ ToDo
 6. [Llama paper (arxiv)](https://arxiv.org/abs/2302.13971)
 
 7. [TensorRT-LLM:大语言模型推理：低精度最佳实践(B站)](https://www.bilibili.com/video/BV1h44y1c72B/?share_source=copy_web&vd_source=db3eecb1b88cc6c7a18eeaf6db1ed114)
+
+8. [大语言模型推理：低精度最佳实践(B站)](https://www.bilibili.com/video/BV1h44y1c72B/?share_source=copy_web&vd_source=db3eecb1b88cc6c7a18eeaf6db1ed114)
 
 
