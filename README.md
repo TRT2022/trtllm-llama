@@ -45,7 +45,7 @@
 + SwiGLU：使用SwiGLU替代了ReLU作为激活函数。和PaLM中不同，维度采用$\frac{2}{3}4d$而不是$4d$  
 + RoPE：采用旋转位置编码，使得大模型的生成有更好的外推性
 
-LLaMA-13B 优于 GPT-3，尽管只有1/10大小。 LLaMA-65B 是可以与 Chinchilla-70B 和 PaLM-540B 这种最佳的LLM相竞争的模型。经过微调之后，LLaMA的效果有显著的提升。关于LLaMA的介绍，推荐知乎文章：
+LLaMA-7B有32个这样的transformer block构成，LLaMA-13B 优于 GPT-3，尽管只有1/10大小。 LLaMA-65B 是可以与 Chinchilla-70B 和 PaLM-540B 这种最佳的LLM相竞争的模型。经过微调之后，LLaMA的效果有显著的提升。关于LLaMA的介绍，推荐知乎文章：
 + [LLaMA 超详细解读（paper & code）](https://zhuanlan.zhihu.com/p/632102048?utm_id=0)
 
 针对于LLaMA-7B和TensorRT-LLM下的`examples/llama`,我们的优化方案计划实现过程如下图所示：
@@ -328,7 +328,7 @@ llama-run (mean latency: 0.7930449199676514 sec)
 
 可以明显看到替换gemm plugin的前后变化，gemm plugin替换前的latency为$28.286\mu s$,gemm plugin替换后的latency为$26.241\mu s$,有一定的加速效果。
 
-4. int4
+4. int4 weight only quant
 
 + build engine
 
@@ -377,16 +377,16 @@ llama-run (mean latency: 0.48769086837768555 sec)
 综上基于上述分析结果，总结如下：
 <div align=center>
 
-|Feature|原Llama是否实现|本项目是否启用|加速比|
-|-|-|-|-|
-| K/V cache|✔️|✔️|-|
-|+Attention Plugin|✔️|✔️|1.224|
-|+Int8 K/V cache|✔️|✔️|-|
-|+Weight Only Quant|✔️|✔️|2.189|
-|+Gemm Plugin|✔️|✔️|2.167|
-|+Int4|✔️|✔️|3.524|
-|Inflight Batching|❌|-|-|
-|SmoothQuant|❌|-|-|
+|Feature|原Llama是否实现|本项目是否启用|batch size|input length|output length|加速比|
+|-|-|-|-|-|-|-|
+| K/V cache|✔️|✔️|1|8|50|-|
+|+Attention Plugin|✔️|✔️|1|8|50|1.224|
+|+Int8 K/V cache|✔️|✔️|1|8|50|-|
+|+Weight Only Quant|✔️|✔️|1|8|50|2.189|
+|+Gemm Plugin|✔️|✔️|1|8|50|2.167|
+|+Int4|✔️|✔️|1|8|50|3.524|
+|Inflight Batching|❌|-|1|8|50|-|
+|SmoothQuant|❌|-|1|8|50|-|
 
 </div>
 
@@ -394,7 +394,39 @@ llama-run (mean latency: 0.48769086837768555 sec)
 
 #### 2.2.3 新featute实现：inflight batching 和 smoothquant
 
-ToDo
+1.smoothquant
+
+<div align=center>
+<img src="./assets/smoothquant1.png"/>
+</div>
+
+如上图所示，某些LLM的某些channel或某些维度的activation outlier值很多且很大(ep. GLM-130B有30%），导致量化的有效位变少，比如int8本来是-128到127，没有outlier的时候，映射到-128到127的数据分布均匀，占满了8bit位范围，精度损失很低，但是有了outlier之后，多数正常值的分布区间可能在[-20,20]或者[-10,10]，8bit位范围只利用到了5bit，甚至4bit，由此导致精度损失。上图中的activation红色橙色是outlier，outlier一般集中存在于某几个channel或axis,且activation比weight更难量化，后者数据分布一般比较均匀，smoothquant的keypoints是可以把activation量化难度迁移到weight上来，把activation里面不均匀的分布用weight中和一下，具体来讲，主要是在fp32阶段做的，保证一个等式的等价，$X$为输入activation，$W$为weight，$s$为因子，通过$s$来中和
+$$Y=(Xdiag(s)^{-1}.(diag(s)W))=\hat{X}\hat{W}$$
+直观的理解如下图所示：
+<div align=center>
+<img src="./assets/smoothquant2.png"/>
+</div>
+
+左边为smooth前，右边为smooth后，可以明显看到X乘以$s^{-1}$之后数据分布明显均匀了，把难度匀了一点给weight。
+
+TensorRT-LLM支持smoothquant并在examples中的其他模型样例中做了实现，下面我们将尝试在`examples/llama`中实现smoothquant。
+
+ToDo:smoothquant实现
+
+
+2.inflight batching
+
+<div align=center>
+<img src="./assets/inflight-batch.png"/>
+</div>
+
+如上图所示，为了增加thoughput我们希望每次推断进batch的数据，对于LLM来说首先需要一个batch的数据中长度不同的sequence进行padding到相同的长度，如上图所示batch size=3,黑色的矩形框表示对每个sequence进行的padding,如果不进行inflight batching操作，一个batch的数据必须全部generate完成才能一起返回，而该bacth中即使有提前generate完成的sequence也必须等待。
+
+inflight batching的过程如上图所示，首先我们创建一个Request Waiting Pool这里存放了所有的待推断的sequence，假设有一个batch的数据padding后经过context phase进行generation phase，batch中的第2个数据提前generate完后即刻返回结果，此时可以在Request Waiting Pool中取出蓝色的新sequence加入到当前batch中，蓝色的sequence执行context phase进而执行generation phase,batch中的其他数据继续执行generation phase。重复上述过程，直到Pool中无需要推断的数据为止。
+
+下面我们将尝试在`examples/llama`中实现inflight batching:
+
+ToDo:inflight batching
 
 
 ### 3.优化效果
@@ -627,6 +659,8 @@ ToDo
 
 7. [TensorRT-LLM:大语言模型推理：低精度最佳实践(B站)](https://www.bilibili.com/video/BV1h44y1c72B/?share_source=copy_web&vd_source=db3eecb1b88cc6c7a18eeaf6db1ed114)
 
-8. [大语言模型推理：低精度最佳实践(B站)](https://www.bilibili.com/video/BV1h44y1c72B/?share_source=copy_web&vd_source=db3eecb1b88cc6c7a18eeaf6db1ed114)
+8. [TensorRT-LLM大语言模型推理：优化关键技术解析(B站)](https://www.bilibili.com/video/BV1j44y1c7fT/?spm_id_from=333.788&vd_source=def8c63d9c5f9bf987870bf827bfcb3d)
+
+9. [SmoothQuant(arxiv)](https://arxiv.org/abs/2211.10438)
 
 
