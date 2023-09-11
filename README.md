@@ -77,7 +77,7 @@ ToDo：
 针对于LLaMA-7B我们的优化过程主要分以下3个部分：
 + 1.初步运行`examples/llama`项目
 + 2.nsight systerm分析逐步添加feature进行消融实验
-+ 3.新featute实现：inflight batching 和 smoothquant
++ 3.新featute实现：int8 k/v cache, smoothquant和inflight batching
 
 每一部分我们提供了详细的运行脚本和测试结果。
 
@@ -232,14 +232,14 @@ llama-hf-run (mean latency: 1.7185083055496215 sec)
 
 可以看到在FP16下，attention plugin的latency为$13.576\mu s$,k/v cache的latency为$925.928\mu s$,带权重的矩阵乘的latency为$45.922\mu s$
 
-2. 添加: int8 k/v cache + attention_plugin + weight_only_quant
+2. 添加: k/v cache + attention_plugin + weight_only_quant
 
 + build engine
 
 ```shell
 python3 build.py --model_dir ./tmp/llama/7B/ \
                 --dtype float16 \
-                --use_int8_kv_cache \
+                --use_weight_only \
                 --output_dir ./tmp/llama/7B/trt_engines/int8_kvcache/1-gpu/
 ```
 
@@ -259,17 +259,11 @@ llama-run (mean latency: 0.7849386262893677 sec)
 ```
 上述结果显示，添加`k/v cache + attention plugin + weight_only_quant`后的TensorRT LLaMA的平均推断延时为`0.78494秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.189`
 
-分析`trt_llm_weight_only`nsys文件，可以清楚的看到attention plugin和int8 k/v cache以及矩阵乘的推理延时情况如下所示：
+分析`trt_llm_weight_only`nsys文件，可以清楚的看到attention plugin和矩阵乘的推理延时情况如下所示：
 
 + attention plugin profiling的耗时情况
 <div align=center>
 <img src="./assets/weight_only_quant/attention.png"/>
-</div>
-
-+ int8 k/v cache profiling的耗时情况
-
-<div align=center>
-<img src="./assets/weight_only_quant/kvcache.png"/>
 </div>
 
 + 带权重的矩阵乘的profiling的耗时情况
@@ -278,15 +272,14 @@ llama-run (mean latency: 0.7849386262893677 sec)
 <img src="./assets/weight_only_quant/matmul.png"/>
 </div>
 
-可以看到在weight only quant下，attention plugin的latency为$17.837\mu s$,int8 K/V cache的latency为$443.055\mu s$,带权重的矩阵乘的latency为$7.107\mu s$。对比上述FP16的情况有明显的加速效果。
+可以看到在weight only quant下，attention plugin的latency为$17.837\mu s$,带权重的矩阵乘的latency为$7.107\mu s$。对比上述FP16的情况有明显的加速效果。
 
 
-3. 添加: int8 k/v-cache + attention plugin + weight_only_quant + gemm plugin
+3. 添加: k/v cache + attention plugin + weight_only_quant + gemm plugin
 
 + build engine
 
 ```shell
-
 python3 build.py --model_dir ./tmp/llama/7B/ \
                 --dtype float16 \
                 --use_gpt_attention_plugin float16 \
@@ -310,7 +303,7 @@ nsys profile -o trt_llm_weight_only_attention_gemm python3 run.py --max_output_l
 # TensorRT-LLM 
 llama-run (mean latency: 0.7930449199676514 sec)
 ```
-上述结果显示，添加`int8 k/v cache + attention plugin + weight_only_quant + gemm plugin`后的TensorRT LLaMA的平均推断延时为`0.79304秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.167`
+上述结果显示，添加`k/v cache + attention plugin + weight_only_quant + gemm plugin`后的TensorRT LLaMA的平均推断延时为`0.79304秒`，而HF下平均推断延时为`1.71851秒`,加速比为`2.167`
 
 分析`trt_llm_weight_only_attention_gemm`nsys文件，可以清楚的看到gemm在使用plugin前后的推理延时情况如下所示：
 
@@ -381,20 +374,33 @@ llama-run (mean latency: 0.48769086837768555 sec)
 |-|-|-|-|-|-|-|
 | K/V cache|✔️|✔️|1|8|50|-|
 |+Attention Plugin|✔️|✔️|1|8|50|1.224|
-|+Int8 K/V cache|✔️|✔️|1|8|50|-|
 |+Weight Only Quant|✔️|✔️|1|8|50|2.189|
 |+Gemm Plugin|✔️|✔️|1|8|50|2.167|
-|+Int4|✔️|✔️|1|8|50|3.524|
-|Inflight Batching|❌|-|1|8|50|-|
+|+Int4 Weight Only Quant|✔️|✔️|1|8|50|3.524|
+|+Int8 K/V cache|❌|-|1|8|50|-|
 |SmoothQuant|❌|-|1|8|50|-|
+|Inflight Batching|❌|-|1|8|50|-|
 
 </div>
 
 ⚠️注意：我们将在Section3-优化效果的第一部分提供现有feature下的加速效果和精度对比。
 
-#### 2.2.3 新featute实现：inflight batching 和 smoothquant
+#### 2.2.3 新featute实现：int8 k/v cache,smoothquant，inflight batching
 
-1.smoothquant
+1.int8 k/v cache
+
+<div align=center>
+<img src="./assets/int8_kv_cache.png"/>
+</div>
+
+int8 k/v cache本质和weight only quant一样，在模型generation phase读取之前的K和V类似于weight only quant中全连接层中读取weight,参照weight only quant也把K,V用int8保存下来，当我们真正计算的时候再将其dequant到高精度。
+
+`examples/llama`暂时不支持int8 k/v cache,这里我们实现了`examples/llama`的int8 k/v cache
+
+ToDo:int8 k/v cache的实现
+
+
+2.smoothquant
 
 <div align=center>
 <img src="./assets/smoothquant1.png"/>
@@ -409,12 +415,12 @@ $$Y=(Xdiag(s)^{-1}.(diag(s)W))=\hat{X}\hat{W}$$
 
 左边为smooth前，右边为smooth后，可以明显看到X乘以$s^{-1}$之后数据分布明显均匀了，把难度匀了一点给weight。
 
-TensorRT-LLM支持smoothquant并在examples中的其他模型样例中做了实现，下面我们将尝试在`examples/llama`中实现smoothquant。
+`examples/llama`暂不支持smoothquant，这里我们实现了`examples/llama`的smoothquant
 
 ToDo:smoothquant实现
 
 
-2.inflight batching
+3.inflight batching
 
 <div align=center>
 <img src="./assets/inflight-batch.png"/>
