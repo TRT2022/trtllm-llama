@@ -24,8 +24,10 @@
 |2023-08-22|创建Github项目                                              |项目创建|
 |2023-08-24|完成送分题作答                                               |送分题 |
 |2023-08-31|examples/llama源码学习                                       |项目分析 |
-|2023-09-3|正常运行examples/llama                                     |代码运行测试 |
-
+|2023-09-03|正常运行examples/llama                                     |代码运行测试 |
+|2023-09-09|examples/llama trick消融实验                                |消融实验 |
+|2023-09-17|examples/llama 新feature的实现和测试                          |新feature实现 |
+|2023-09-20|README报告书写和代码整理提交                                |报告书写 |
 
 ☣️复赛调优阶段：2023年8月17日-9月21日
 </div>
@@ -54,10 +56,80 @@ LLaMA-7B有32个这样的transformer block构成，LLaMA-13B 优于 GPT-3，尽�
 <img src="./assets/TensorRT-LLM LLaMa进度图.png"/>
 </div>
 
-ToDo：
-- 优化效果（例如给出精度和加速比），简单给出关键的数字即可，在这里不必详细展开
-- 在Docker里面代码编译、运行步骤的完整说明
-  - 请做到只要逐行运行你给的命令，就能把代码跑起来
+如上图所示，基于`examples/llama`我们实现了：
++ `examples/llama`现有feature的消融实验并基于sight Systems进行了Profiling
++ 实现了`examples/llama`暂未实现的int8 k/v cache和smoothquant
++ 对各种情况进行延时，加速比和精度的对比
++ 初赛阶段在TensorRT官方Repo提交了关了InstanceNorm Plugin的一个bug
++ 送分题的作答
++ 时间关系截止项目提交smoothquant的error问题和inflght batching暂未实现
+
+最终优化效果为：
++ 尝试消融各种feature普遍的TensorRT-LLM的加速比在`1.18-2.74`之间
++ TensorRT-LLM可以很好的把rouge score的差异控制在1以内或左右
++ 新feature int8 k/v cache的测试结果可以正常工作且有一定的加速效果
+
+详细的优化效果请参考section 2和section 3的介绍。
+
+该项目测试运行的软硬件环境请参考section 3.1,下面面我们将详细介绍如何逐步运行该项目:
+
++ 项目结构
+
+<details>
+<summary>点我查看项目结构</summary>
+
+```shell
+./tensorrt_llm_july-release-v1
+├── examples               # 这里存放了了我们的核心代码!
+│   ├── bert  
+│   ├── bloom
+│   ├── chatglm6b
+│   ├── cpp_library  
+│   ├── gpt               #送分题
+│   ├── gptj
+│   ├── gptneox
+│   ├── lamma            # llamav1-7b feature消融实验
+│    ├── build.py        # 构建engine
+│    ├── README.md       # readme
+│    ├── requirements.txt  # python package requirements
+│    ├── run.py          # run tensorrt-llm engine
+│    ├── run_hf.py       # run hf model 
+│    ├── summarize.py    # 文本摘要测试任务
+│    └── weight.py       # build engine过程中加载hf或meta权重文件
+|
+│   ├── llama_quant      # llama v1-7b 新feature的实现 
+│    ├── build.py        # 构建engine 支持int8 k/v cache, smooth quant
+│    ├── convert.py      # hf模型转ft模型
+│    ├── hf_llama_convert.py # hf模型转ft模型 入口
+│    ├── llama_model.py      # tensorrt-llm llama v1-7b 模型结构
+│    ├── README.md       # readme
+│    ├── requirements.txt # python package requirements
+│    ├── run.py          # run tensorrt engine
+│    ├── run_hf.py       # run hf model
+│    ├── summarize.py    # 文本摘要任务测试
+│    ├── check_weight.py # 检查hf模型权重和ft模型权重的一致性
+│    ├── quant.py        # smooth quant 替换文件
+│    ├── smoothquant.py  # smooth quant的实现
+│    └── weight_quant.py # build engine过程中加载ft weight支持int8 k/v cache,smoothquant
+|
+│   ├── openai_triton      
+│   └── opt  
+│ 
+├── ... # tensorrt_llm_july-release-v1中的其他库文件或代码
+│ 
+└── README.md  # tensorrt_llm_july-release-v1内的readme
+```
+
+</details>
+
++ 逐步运行方式说明
+
+<details>
+<summary>点我查看运行方式</summary>
+
+ToDo
+
+</details>
 
 
 ### 2.主要开发工作
@@ -89,7 +161,7 @@ ToDo：
 
 LlaMA-7B v1 (meta checkpoint)模型下载地址： <https://115.com/s/sw6a2kv3w4z?password=a835&#>,将下载后的模型存放在`/tensorrt_llm_july-release-v1/examples/llama/llama-1-7b-meta/`下
 
-+ meta checkpoint 转 huggingface(HF) checkpoint
++ meta checkpoint 转 huggingface(以下简称HF) checkpoint
 
 ```shell
 # cd到目标路径
@@ -169,13 +241,13 @@ python3 summarize.py --test_hf \
 
 该部分我们做了详细的消融实验，通过逐步添加feature和trick的方式验证不同feature在LLaMA-7B上的Latency的收益，并基于nsight system进行profiling。
 
-目前`examples/llama`的feature支持情况如下图所示：
+截止本项目复赛提供的镜像`examples/llama`的feature支持情况如下图所示：
 
 <div align=center>
 <img src="./assets/TensorRT_LLM LLaMa.png"/>
 </div>
 
-由于LLaMA-7B中使用了RoPE,目前`gpt_attention_plugin`是唯一的一种支持RoPE的方式，因此LLaMA在TensorRT-LLM中强制使用了`gpt_attention_plugin`
+由于LLaMA-7B中使用了RoPE,目前`gpt_attention_plugin`(以下简称attention plugin)是目前唯一的一种支持RoPE的方式，因此LLaMA在TensorRT-LLM中强制使用了`gpt_attention_plugin`
 
 1. 添加: k/v cache + attention pligin
 
@@ -369,6 +441,7 @@ llama-run (mean latency: 0.48769086837768555 sec)
 
 综上基于上述分析结果，总结如下：
 <div align=center>
+<p>Table-1: Feature与Latency的消融实验(examples/llama现支持的feature)</p>
 
 |Feature|原Llama是否实现|本项目是否启用|batch size|input length|output length|加速比|
 |-|-|-|-|-|-|-|
@@ -376,16 +449,18 @@ llama-run (mean latency: 0.48769086837768555 sec)
 |+Attention Plugin|✔️|✔️|1|8|50|1.224|
 |+Weight Only Quant|✔️|✔️|1|8|50|2.189|
 |+Gemm Plugin|✔️|✔️|1|8|50|2.167|
-|+Int4 Weight Only Quant|✔️|✔️|1|8|50|3.524|
-|+Int8 K/V cache|❌|-|1|8|50|-|
+|Int4 Weight Only Quant|✔️|✔️|1|8|50|3.524|
+|Int8 K/V cache|❌|-|1|8|50|-|
 |SmoothQuant|❌|-|1|8|50|-|
 |Inflight Batching|❌|-|1|8|50|-|
 
 </div>
 
-⚠️注意：我们将在Section3-优化效果的第一部分提供现有feature下的加速效果和精度对比。
+⚠️注意：我们将在下一节新feature的实现中进一步完善该表格，并在Section3-优化效果的第一部分提供现有feature下的加速效果和精度对比。
 
 #### 2.2.3 新featute实现：int8 k/v cache,smoothquant，inflight batching
+
+为了体现我们在本项目的工作，我们将新feature的实现单独在`examples`中构建了一个新的项目`examples/llama_quant`
 
 1.int8 k/v cache
 
@@ -397,8 +472,82 @@ int8 k/v cache本质和weight only quant一样，在模型generation phase读取
 
 `examples/llama`暂时不支持int8 k/v cache,这里我们实现了`examples/llama`的int8 k/v cache
 
-ToDo:int8 k/v cache的实现
 
++ 将HF模型转换为FasterTransformer(以下简称FT)模型
+
+这里我实现了LLaMA-7B的HF模型转换为FT模型，过程中实现了int8 k/v cache.
+
+```shell
+cd tensorrt_llm_july-release-v1/examples/llama_quant
+
+python3 hf_llama_convert.py -i tmp/llama/7B \
+                            -o ./c-model/llama \
+                            --tensor-parallelism 1  \
+                            --storage-type float16  \
+                             --calibrate-kv-cache 
+```
+输出如下信息，支持int8 k/v cache的FT模型文件生成完成，生成后的FT模型文件存放在当前路径下的`c-model`文件夹下：
+
+<div align=center>
+<img src="./assets/int8kv_1.png"/>
+</div>
+
+
++ 构建包含int8 k/v cache的engine
+
+这里我们重写了`examples/llama`中的`build.py`,使其可以支持int8 k/v cache
+
+```shell
+cd tensorrt_llm_july-release-v1/examples/llama_quant
+
+python3 build.py --model_dir=./c-model/llama/1-gpu \
+                 --use_gpt_attention_plugin float16\
+                 --int8_kv_cache \
+                 --output_dir=./tmp/llama/7B/trt_engines/int8kv/1-gpu/
+```
+
+输出如下信息，支持int8 k/v cache的engine序列化完成，并保存在`./tmp/llama/7B/trt_engines/int8kv`下：
+
+<div align=center>
+<img src="./assets/int8kv_2.png"/>
+</div>
+
++ Latency的测试
+
+```shell
+python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/int8kv/1-gpu/
+```
+
+其输出结果为：
+
+```
+# int8 k/v cache engine
+llama-run (mean latency: 1.4051964092254638 sec)
+```
+`int8 k/v cache + attention plugin`的平均推理延时为`1.40519秒`，上文可知HF下平均推断延时为`1.71851秒`，其加速比为：`1.223`
+
++ 在文本摘要数据的Latency和精度
+
+```shell
+python3 summarize.py --test_trt_llm  \
+                     --hf_model_location ./tmp/llama/7B/  \
+                     --data_type fp16 \
+                     --engine_dir ./tmp/llama/7B/trt_engines/int8kv/1-gpu/
+```
+输出结果如下：
+
+```
+[09/16/2023-12:03:17] [TRT-LLM] [I] ---------------------------------------------------------
+[09/16/2023-12:04:28] [TRT-LLM] [I] TensorRT-LLM (total latency: 66.31966018676758 sec)
+[09/16/2023-12:04:28] [TRT-LLM] [I] TensorRT-LLM beam 0 result
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rouge1 : 18.630357255367613
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rouge2 : 5.62976959191806
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rougeL : 14.616061481091847
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rougeLsum : 16.930935356053094
+root@0933517de088:~/workspace/tensorrt_llm_july-release-v1/examples/llama_quant#
+```
 
 2.smoothquant
 
@@ -415,12 +564,60 @@ $$Y=(Xdiag(s)^{-1}.(diag(s)W))=\hat{X}\hat{W}$$
 
 左边为smooth前，右边为smooth后，可以明显看到X乘以$s^{-1}$之后数据分布明显均匀了，把难度匀了一点给weight。
 
-`examples/llama`暂不支持smoothquant，这里我们实现了`examples/llama`的smoothquant
+`examples/llama`暂不支持smoothquant，这里我们实现了`examples/llama`的smoothquant，并将其存放在`examples/llama_quant`项目中
 
-ToDo:smoothquant实现
+本节中我们首选实现了LLaMA-7B的HF转FT模型并以此实现smoothquant,但在进行build engine的过程中出现了error，时间关系暂未分析出error是bug还是其他代码原因导致。
+
++ 生成包含smoothquant的FT模型
+
+```shell
+python3 hf_llama_convert.py -i tmp/llama/7B \
+                            -o ./c-model/llama \
+                            --tensor-parallelism 1   \
+                            --storage-type float16  \
+                            --smoothquant 0.5
+```
+运行上述代码输出如下，我们成功的将HF模型转换为包含smoothquant的FT模型：
+<div align=center>
+<img src="./assets/smoothquant_1.png"/>
+</div>
+
+FT权重文件被存放在`c-model`下，其结构如下图所示：
+
+<div align=center>
+<img src="./assets/smoothquant_2.png"/>
+</div>
 
 
-3.inflight batching
++ 构建支持smooth quant的engine
+
+```shell
+python3 build.py --model_dir=./c-model/llama/1-gpu \
+                 --use_gpt_attention_plugin float16\
+                 --use_smooth_quant \
+                 --output_dir=./tmp/llama/7B/trt_engines/sm/1-gpu/
+
+```
+
+序列化engine过程中，报如下错误：
+
+
+<div align=center>
+<img src="./assets/smooth_error.jpg"/>
+</div>
+
+由于时间关系，我们尝试解决该error但暂时没有解决，我们目前无法确定上述error是否是TensorRT-LLM的bug。
+
+
+<!-- ```shell
+python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/sm/1-gpu/
+``` -->
+> 该问题我们将在比赛结束后继续解决！
+
+
+3.inflight batching (#ToDo)
 
 <div align=center>
 <img src="./assets/inflight-batch.png"/>
@@ -430,15 +627,99 @@ ToDo:smoothquant实现
 
 inflight batching的过程如上图所示，首先我们创建一个Request Waiting Pool这里存放了所有的待推断的sequence，假设有一个batch的数据padding后经过context phase进行generation phase，batch中的第2个数据提前generate完后即刻返回结果，此时可以在Request Waiting Pool中取出蓝色的新sequence加入到当前batch中，蓝色的sequence执行context phase进而执行generation phase,batch中的其他数据继续执行generation phase。重复上述过程，直到Pool中无需要推断的数据为止。
 
-下面我们将尝试在`examples/llama`中实现inflight batching:
+由于时间关系，本比赛没能实现`examples/llama`项目的inflight batching。我们相信复赛是我们尝试使用TensorRT-LLM的开始，我们将在后期持续完成inflight batching的实现。
 
-ToDo:inflight batching
+综上所述，我们在新feature部分的工作主要包括：
 
++ 实现了LLaMA-7B HF模型转FT模型及针对于FT模型权重的engine build
++ 基于该模型转换实现了int8 k/v cache并成功序列化engine完成精度和延时的测试
++ 基于该模型转换实现了smoothquant的转换和相应的build engine和精度延时测试的代码部分
+
+待完成的工作：
+
++ smoothquant在build engine中出现关于`Cutlass int8 gemm`的报错，该错误暂时未被解决，同时在build engine中暂未实现`GateMLP`的smoothquant的核心代码
++ inflight batching暂未实现
+
+最后给出Table-1的补充：
+<div align=center>
+
+<p>Table-2: Feature与Latency的消融实验(增加int8 k/v cache，smoothquant, inflight batching)</p>
+
+|Feature|原Llama是否实现|本项目是否启用|batch size|input length|output length|加速比|
+|-|-|-|-|-|-|-|
+| K/V cache|✔️|✔️|1|8|50|-|
+|+Attention Plugin|✔️|✔️|1|8|50|1.224|
+|+Weight Only Quant|✔️|✔️|1|8|50|2.189|
+|+Gemm Plugin|✔️|✔️|1|8|50|2.167|
+|+Int4 Weight Only Quant|✔️|✔️|1|8|50|3.524|
+|Int8 K/V cache|❌|✔️|1|8|50|1.223|
+|SmoothQuant|❌|✔️|1|8|50|Build Error|
+|Inflight Batching|❌|❌|1|8|50|-|
+
+</div>
 
 ### 3.优化效果
 ---
 
-ToDo
+#### 3.1 运行的软硬件环境说明
+
+整个项目的测试软件件环境如下：
+
+Host硬件环境：
++ CPU: Intel(R) Xeon(R) Platinum 8369B CPU @ 2.90GHz
++ GPU: NVIDIA A10(24G) 
++ 系统： Ubuntu 22.04.2 LTS
+
+Host软件环境：
++ 显卡驱动：Driver Version: 525.105.17 
++ Docker版本： 24.0.5
++ NVIDIA-Docker
+
+Docker镜像:
++ 参考链接：<https://github.com/NVIDIA/trt-samples-for-hackathon-cn/blob/master/Hackathon2023/HackathonGuide.md>
++ 镜像名为: registry.cn-hangzhou.aliyuncs.com/trt-hackathon/trt-hackathon:final_v1
++ TensorRT 9.0 EA 安装目录为: /usr/local/TensorRT-9.0.0.2
++ TensorRT-LLM 代码目录为 /root/workspace/tensorrt_llm_july-release-v1
+
+#### 3.2 推理加速比和模型精度对比
+
+基于上述软硬件环境的测试，我们统计了section2中生成的结果，因为模型显存问题，我们只提供`batch size=1`的结果，其主要包括加速比和精度的比较如下表所示：
+
+<div align=center>
+
+<!-- min input length 251 max input length 923 -->
+
+<p>Table-3: LLaMA-7B TensorRT-LLM加速性能统计表（延时比较）</p>
+
+|model|trick|max input length|output length| beam size|total latency(s)|speedup|
+|-|-|-|-|-|-|-|
+| HF Model|FP16|923|100|1|78.228|1.000|
+| TRT Model|K/V cache++Attention Plugin(FP16)|923|100|1|66.031|1.185|
+| TRT Model|+Weight Only Quant(int8)|923|100|1|40.297|1.941|
+| TRT Model|+Gemm Plugin(int8)|923|100|1|41.237|1.897|
+| TRT Model|+Weight Only Quant(int4)|923|100|1|28.596|2.736|
+| TRT Model|Int8 K/V cache|923|100|1|66.319|1.180|
+
+</div>
+
+
+<div align=center>
+
+<p>Table-4: LLaMA-7B TensorRT-LLM加速性能统计表（精度比较）</p>
+
+|model|trick|max input length|output length| beam size|rouge1 (abs-error)|rouge2(abs-error)|rougeL (abs-error)|rougeLsum (abs-error)|
+|-|-|-|-|-|-|-|-|-|
+| HF Model|FP16|923|100|1|20.106 (0.000)|5.910 (0.000)|15.226 (0.000)|17.938 (0.000)|
+| TRT Model|K/V cache++Attention Plugin(FP16)|923|100|1|18.360 (1.746)|5.591 (0.319)|13.704 (1.522)|16.843 (1.095)|
+| TRT Model|+Weight Only Quant(int8)|923|100|1|20.065 (0.041)|6.267 (0.357)|15.433 (0.207)|18.047 (0.109)|
+| TRT Model|+Gemm Plugin(int8)|923|100|1|19.881 (0.225)|5.604 (0.306)|14.532 (0.694)|17.530 (0.408)|
+| TRT Model|+Weight Only Quant(int4)|923|100|1|18.633 (1.473)|5.434 (0.476)|14.134 (1.092)|16.316 (1.622)|
+| TRT Model|Int8 K/V cache|923|100|1|18.630 (1.476)|5.629 (0.281)|14.616 (0.610)|16.930 (1.008)|
+
+</div>
+
+该测试数据来源：`cnn_dailymail`文本摘要数据集，分析上述表格发现增加不同的trick,LLaMA-7B在TensorRT-LLM下的延时和精度的变化，可以清晰的看到TensorRT-LLM可以很好的把rouge score的差异控制在1以内或左右同时有`1.18-2.74`倍的加速比，在int8 k/v cache的测试结果表明我们新增的feature是正常工作的且有一定的加速效果。我们将模型测试过程产生的日志源文件存放在了`test_res`文件夹下。
+
 
 ### 4.Bug报告
 ---
@@ -447,7 +728,7 @@ ToDo
 
 |:bug: Bug名称|Issue|是否被官方确认|说明|
 |-|-|:-:|-|
-|InstanceNormalization Plugin |<https://github.com/NVIDIA/TensorRT/issues/3165>||官方暂未确认|
+|InstanceNormalization Plugin |<https://github.com/NVIDIA/TensorRT/issues/3165>||初赛时提交到TensorRT，我们确定是bug但一直未得到回复|
 
 </div>
 
@@ -646,7 +927,7 @@ Token indices sequence length is longer than the specified maximum sequence leng
 ### 6.未来工作
 ---
 
-ToDo
+LLM可以肯定的是当前和未来AI深入研究和产品化的重要研究方向，越来越多的企业和研究机构也在致力研究LLM的加速推理框架，TensorRT-LLM作为新一代的基于TensorRT 9.0的LLM的推理加速框架，给大模型的部署提供了高效可行的方案。TensorRT-LLM集成了主流的LLM模型加速的方案包括：（int8) k/v cache, weight only quant, smooth quant, inflight batching及各种高效的Plugin。比赛过程中我们需要细致的研究TensorRT-LLM的实现方式，熟悉TenserRT-LLM的构建逻辑，这花费我们大量的时间和精力，加之对TensorRT-LLM的熟悉程度不够导致我们无法在短时间实现我们规划的新Feature的实现，比如smoothquant的build engine的error问题，inflight batching的feature的实现等等。未来我们将持续关注TensorRT-LLM的进展，实现上述遗留的问题，并期待正式版本的TensorRT-LLM的发布。
 
 ### 7.😉References
 ---

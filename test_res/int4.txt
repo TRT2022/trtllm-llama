@@ -1,0 +1,10 @@
+
+[09/17/2023-10:52:43] [TRT-LLM] [I] ---------------------------------------------------------
+[09/17/2023-10:54:25] Using the latest cached version of the module from /root/.cache/huggingface/modules/datasets_modules/metrics/rouge/0ffdb60f436bdb8884d5e4d608d53dbe108e82dac4f494a66f80ef3f647c104f (last modified on Thu Aug 24 08:40:58 2023) since it couldn't be found locally at rouge, or remotely on the Hugging Face Hub.
+[09/17/2023-10:54:56] [TRT-LLM] [I] TensorRT-LLM (total latency: 28.59661293029785 sec)
+[09/17/2023-10:54:56] [TRT-LLM] [I] TensorRT-LLM beam 0 result
+[09/17/2023-10:54:56] [TRT-LLM] [I]   rouge1 : 18.63369656060233
+[09/17/2023-10:54:56] [TRT-LLM] [I]   rouge2 : 5.434804020166756
+[09/17/2023-10:54:56] [TRT-LLM] [I]   rougeL : 14.134978217112904
+[09/17/2023-10:54:56] [TRT-LLM] [I]   rougeLsum : 16.3164856075979
+root@0933517de088:~/workspace/tensorrt_llm_july-release-v1/examples/llama#

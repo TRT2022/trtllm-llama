@@ -1,0 +1,9 @@
+Summary : [['James Best, best known for his portrayal of bumbling sheriff Rosco P. Coltrane on TV\'s "The Dukes of Hazzard," died Monday after a brief illness. He was 88. Best died in hospice in Hickory, North Carolina, of complications from pneumonia, said Steve Latshaw, a longtime friend and Hollywood colleague. Although he\'d been a busy actor for decades in']]
+[09/17/2023-10:26:12] [TRT-LLM] [I] ---------------------------------------------------------
+[09/17/2023-10:27:09] [TRT-LLM] [I] TensorRT-LLM (total latency: 40.297616958618164 sec)
+[09/17/2023-10:27:09] [TRT-LLM] [I] TensorRT-LLM beam 0 result
+[09/17/2023-10:27:09] [TRT-LLM] [I]   rouge1 : 20.065844713890073
+[09/17/2023-10:27:09] [TRT-LLM] [I]   rouge2 : 6.267611469338902
+[09/17/2023-10:27:09] [TRT-LLM] [I]   rougeL : 15.433409597786794
+[09/17/2023-10:27:09] [TRT-LLM] [I]   rougeLsum : 18.047573706875465
+root@0933517de088:~/workspace/tensorrt_llm_july-release-v1/examples/llama#

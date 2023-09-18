@@ -132,6 +132,6 @@ class QuantMode(IntFlag):
         return QuantMode.from_description(True, True, per_token, per_channel)
 
     @staticmethod
-    def use_weight_only(use_int4_weights=False,use_int8_kv_cache=False):
+    def use_weight_only(use_int4_weights=False):
         return QuantMode.from_description(True, False, False, False,
-                                          use_int4_weights,use_int8_kv_cache)
+                                          use_int4_weights)

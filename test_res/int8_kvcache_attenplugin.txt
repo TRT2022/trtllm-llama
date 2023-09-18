@@ -1,0 +1,8 @@
+[09/16/2023-12:03:17] [TRT-LLM] [I] ---------------------------------------------------------
+[09/16/2023-12:04:28] [TRT-LLM] [I] TensorRT-LLM (total latency: 66.31966018676758 sec)
+[09/16/2023-12:04:28] [TRT-LLM] [I] TensorRT-LLM beam 0 result
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rouge1 : 18.630357255367613
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rouge2 : 5.62976959191806
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rougeL : 14.616061481091847
+[09/16/2023-12:04:28] [TRT-LLM] [I]   rougeLsum : 16.930935356053094
+root@0933517de088:~/workspace/tensorrt_llm_july-release-v1/examples/llama_quant#

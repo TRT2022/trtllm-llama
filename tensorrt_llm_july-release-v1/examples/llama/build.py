@@ -180,11 +180,6 @@ def parse_arguments():
         'Define the precision for the weights when using weight-only quantization.'
         'You must also use --use_weight_only for that argument to have an impact.'
     )
-    parser.add_argument(
-        '--use_int8_kv_cache',
-        default=False,
-        action="store_true",
-        help='int8 k/v cache')
 
     args = parser.parse_args()
 
@@ -261,11 +256,6 @@ def build_rank_engine(builder: Builder,
         tensorrt_llm_llama = weight_only_quantize(
             tensorrt_llm_llama,
             QuantMode.use_weight_only(use_int4_weights=True))
-    elif args.use_int8_kv_cache:
-        tensorrt_llm_llama = weight_only_quantize(
-            tensorrt_llm_llama,
-            QuantMode.use_weight_only(use_int8_kv_cache=True))
-
     if args.meta_ckpt_dir is not None:
         load_from_meta_llama(tensorrt_llm_llama,
                              args.meta_ckpt_dir,
@@ -302,7 +292,7 @@ def build_rank_engine(builder: Builder,
             dtype=args.use_gpt_attention_plugin)
     if args.use_gemm_plugin:
         network.plugin_config.set_gemm_plugin(dtype=args.use_gemm_plugin)
-    if args.use_weight_only or args.use_int8_kv_cache:
+    if args.use_weight_only:
         network.plugin_config.set_weight_only_quant_matmul_plugin(
             dtype='float16')
     if args.world_size > 1:
@@ -315,10 +305,9 @@ def build_rank_engine(builder: Builder,
         network.set_named_parameters(tensorrt_llm_llama.named_parameters())
 
         # Forward
-        use_cache = True
         inputs = tensorrt_llm_llama.prepare_inputs(args.max_batch_size,
                                                    args.max_input_len,
-                                                   args.max_output_len, use_cache,
+                                                   args.max_output_len, True,
                                                    args.max_beam_width)
         tensorrt_llm_llama(*inputs)
         if args.enable_debug_output:
