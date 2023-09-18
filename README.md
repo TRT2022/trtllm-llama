@@ -71,7 +71,7 @@ LLaMA-7B有32个这样的transformer block构成，LLaMA-13B 优于 GPT-3，尽�
 
 详细的优化效果请参考section 2和section 3的介绍。
 
-该项目测试运行的软硬件环境请参考section 3.1,下面面我们将详细介绍如何逐步运行该项目:
+该项目测试运行的软硬件环境请参考section 3.1,下面我们将详细介绍如何逐步运行该项目:
 
 + 项目结构
 
@@ -127,7 +127,199 @@ LLaMA-7B有32个这样的transformer block构成，LLaMA-13B 优于 GPT-3，尽�
 <details>
 <summary>点我查看运行方式</summary>
 
-ToDo
+1.环境准备
+
+```shell
+# 拉取镜像 
+docker pull registry.cn-hangzhou.aliyuncs.com/trt-hackathon/trt-hackathon:final_v1
+
+# run 镜像
+nvidia-docker run -it --name trt2023 registry.cn-hangzhou.aliyuncs.com/trt-hackathon/trt-hackathon:final_v1
+
+# 进入容器中新建临时文件夹,并clone本项目
+mkdir temp
+cd temp
+git clone https://github.com/TRT2022/trtllm-llama
+
+# 进入clone的项目
+cd trtllm_llama/tensorrt_llm_july-release-v1/examples
+
+# 将examples中的llama和llama_quant copy替换镜像中的项目
+cp -r ./llama /root/workspace/tensorrt_llm_july-release-v1/examples/
+cp -r ./llama_quant /root/workspace/tensorrt_llm_july-release-v1/examples/
+
+# 将llama_quant/quant.py文件copy提替换到python package
+cd /root/workspace/tensorrt_llm_july-release-v1/examples/llama_quant
+cp ./quant.py /usr/local/lib/python3.8/dist-packages/tensorrt_llm/models/quantized/
+
+# 安装必要的python package
+pip3 install -r requirements.txt -i  http://mirrors.aliyun.com/pypi/simple/
+
+cd /root/workspace/tensorrt_llm_july-release-v1/examples
+```
+
+2.送分题详细见section5
+
+3.尝试运行llama
+
++ 下载模型
+
+LlaMA-7B v1 (meta checkpoint)模型下载地址： <https://115.com/s/sw6a2kv3w4z?password=a835&#>,将下载后的模型存放在`/tensorrt_llm_july-release-v1/examples/llama/llama-1-7b-meta/`下
+
++ meta checkpoint 转 huggingface(以下简称HF) checkpoint
+
+```shell
+# cd到目标路径
+cd ./tensorrt_llm_july-release-v1/examples/llama
+# 模型转HF checkpoint
+python3 /usr/local/lib/python3.8/dist-packages/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir ./llama-1-7b-meta --model_size 7B --output_dir ./tmp/llama/7B
+```
+
++ 构建TensorRT-LLM engine
+
+```shell
+# 加入plugin
+python build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_gpt_attention_plugin float16 \
+                --use_gemm_plugin float16 \
+                --output_dir ./tmp/llama/7B/trt_engines/fp16/1-gpu/
+```
+
++ 运行engine
+
+```shell
+python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/fp16/1-gpu/
+```
+
++ 使用LLaMA-7B测试文本摘要任务
+
+```shell
+# 使用TensorRT-LLM engine测试
+python3 summarize.py --test_trt_llm \
+                    --hf_model_location ./tmp/llama/7B/ \
+                    --data_type fp16 \
+                    --engine_dir ./tmp/llama/7B/trt_engines/fp16/1-gpu/
+
+# 使用HF模型测试
+python3 summarize.py --test_hf \
+                    --hf_model_location ./tmp/llama/7B/ \
+                    --data_type fp16
+```
+
+4.llama feature消融实验
+
+```shell
+cd /root/workspace/tensorrt_llm_july-release-v1/examples/llama
+
+# ------------k/vcache+attention plugin---------------
+# build engine
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --output_dir ./tmp/llama/7B/trt_engines/fp16/1-gpu \
+# run engine
+run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/fp16/1-gpu/
+
+# run HF checkpoint
+python3 run_hf.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --hf_model_location ./tmp/llama/7B/
+
+# ----------k/v cache + attention_plugin + weight_only_quant---------
+# build engine
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_weight_only \
+                --output_dir ./tmp/llama/7B/trt_engines/int8_kvcache/1-gpu/
+
+#run engine
+python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/weight_only/1-gpu/
+
+#----k/v cache + attention plugin + weight_only_quant + gemm plugin-----
+# build engine
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_gpt_attention_plugin float16 \
+                --use_gemm_plugin float16 \
+                --use_weight_only \
+                --output_dir ./tmp/llama/7B/trt_engines/weight_only_attention_gemm/1-gpu/
+
+#run engine
+python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/weight_only_attention_gemm/1-gpu/
+
+#-----------int4 weight only quant--------------
+# build engine
+python3 build.py --model_dir ./tmp/llama/7B/ \
+                --dtype float16 \
+                --use_gpt_attention_plugin float16 \
+                --use_gemm_plugin float16 \
+                --use_weight_only \
+                --weight_only_precision int4 \
+                --output_dir ./tmp/llama/7B/trt_engines/int4/1-gpu/
+
+#run engine
+nsys profile -o trt_llm__int4 python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/int4/1-gpu/
+```
+
+5.llama 新feature的实现
+
+```shell
+cd /root/workspace/tensorrt_llm_july-release-v1/examples/llama_quant
+
+#-----------int8 k/v cache---------------
+# HF model 转 FT model support int8 k/v cache
+python3 hf_llama_convert.py -i tmp/llama/7B \
+                            -o ./c-model/llama \
+                            --tensor-parallelism 1  \
+                            --storage-type float16  \
+                             --calibrate-kv-cache 
+# build int8 k/v cache engine
+python3 build.py --model_dir=./c-model/llama/1-gpu \
+                 --use_gpt_attention_plugin float16\
+                 --int8_kv_cache \
+                 --output_dir=./tmp/llama/7B/trt_engines/int8kv/1-gpu/
+
+# run int8 k/v cache engine
+python3 run.py --max_output_len=50 \
+               --tokenizer_dir ./tmp/llama/7B/ \
+               --engine_dir=./tmp/llama/7B/trt_engines/int8kv/1-gpu/
+
+# summary data test engine
+python3 summarize.py --test_trt_llm  \
+                     --hf_model_location ./tmp/llama/7B/  \
+                     --data_type fp16 \
+                     --engine_dir ./tmp/llama/7B/trt_engines/int8kv/1-gpu/
+
+```
+
+```shell
+cd /root/workspace/tensorrt_llm_july-release-v1/examples/llama_quant
+#---------------smooth quant---------------
+
+# hf model 转 ft model support smooth quant
+python3 hf_llama_convert.py -i tmp/llama/7B \
+                            -o ./c-model/llama \
+                            --tensor-parallelism 1   \
+                            --storage-type float16  \
+                            --smoothquant 0.5
+
+# build smooth quant model
+python3 build.py --model_dir=./c-model/llama/1-gpu \
+                 --use_gpt_attention_plugin float16\
+                 --use_smooth_quant \
+                 --output_dir=./tmp/llama/7B/trt_engines/sm/1-gpu/
+
+```
 
 </details>
 
@@ -515,6 +707,7 @@ python3 build.py --model_dir=./c-model/llama/1-gpu \
 + Latency的测试
 
 ```shell
+cd tensorrt_llm_july-release-v1/examples/llama_quant
 python3 run.py --max_output_len=50 \
                --tokenizer_dir ./tmp/llama/7B/ \
                --engine_dir=./tmp/llama/7B/trt_engines/int8kv/1-gpu/
@@ -531,6 +724,7 @@ llama-run (mean latency: 1.4051964092254638 sec)
 + 在文本摘要数据的Latency和精度
 
 ```shell
+cd tensorrt_llm_july-release-v1/examples/llama_quant
 python3 summarize.py --test_trt_llm  \
                      --hf_model_location ./tmp/llama/7B/  \
                      --data_type fp16 \
@@ -571,6 +765,7 @@ $$Y=(Xdiag(s)^{-1}.(diag(s)W))=\hat{X}\hat{W}$$
 + 生成包含smoothquant的FT模型
 
 ```shell
+cd tensorrt_llm_july-release-v1/examples/llama_quant
 python3 hf_llama_convert.py -i tmp/llama/7B \
                             -o ./c-model/llama \
                             --tensor-parallelism 1   \
@@ -592,6 +787,7 @@ FT权重文件被存放在`c-model`下，其结构如下图所示：
 + 构建支持smooth quant的engine
 
 ```shell
+cd tensorrt_llm_july-release-v1/examples/llama_quant
 python3 build.py --model_dir=./c-model/llama/1-gpu \
                  --use_gpt_attention_plugin float16\
                  --use_smooth_quant \
@@ -663,7 +859,7 @@ inflight batching的过程如上图所示，首先我们创建一个Request Wait
 
 #### 3.1 运行的软硬件环境说明
 
-整个项目的测试软件件环境如下：
+整个项目的测试软硬件环境如下：
 
 Host硬件环境：
 + CPU: Intel(R) Xeon(R) Platinum 8369B CPU @ 2.90GHz
