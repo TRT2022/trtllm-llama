@@ -44,7 +44,7 @@
 
 首先是LLaMA模型的相关介绍，[LLaMA](https://github.com/facebookresearch/llama) 是目前为止，效果最好的开源 LLM 之一,数据集层面上共有1.4T的Tokens, tokenizer使用byte pair encoding (BPE) 算法，Sentence-Piece的实现,所有数字被拆分为单独的digit，所有未知的UTF-8 字符，回退到字节来进行分解。因此，LLaMA 可以通过byte 的方式，构造出很多不在 vocab 中的字符，从而也具有较好的多语言能力。网络结构上的改进基于Transformer的架构，并做了如下3点改进：
 + Pre-Normalization：为了提高训练的稳定性，对每个transformer层的输入进行归一化，而不是输出进行归一化（使用 RMS Norm 归一化函数）
-+ SwiGLU：使用SwiGLU替代了ReLU作为激活函数。和PaLM中不同，维度采用$\frac{2}{3}4d$而不是$4d$  
++ SwiGLU：使用SwiGLU替代了ReLU作为激活函数。和PaLM中不同，维度采用 $\frac{2}{3}4d$ 而不是$4d$  
 + RoPE：采用旋转位置编码，使得大模型的生成有更好的外推性
 
 LLaMA-7B有32个这样的transformer block构成，LLaMA-13B 优于 GPT-3，尽管只有1/10大小。 LLaMA-65B 是可以与 Chinchilla-70B 和 PaLM-540B 这种最佳的LLM相竞争的模型。经过微调之后，LLaMA的效果有显著的提升。关于LLaMA的介绍，推荐知乎文章：
@@ -57,7 +57,7 @@ LLaMA-7B有32个这样的transformer block构成，LLaMA-13B 优于 GPT-3，尽�
 </div>
 
 如上图所示，基于`examples/llama`我们实现了：
-+ `examples/llama`现有feature的消融实验并基于sight Systems进行了Profiling
++ `examples/llama`现有feature的消融实验并基于nsight system进行了Profiling
 + 实现了`examples/llama`暂未实现的int8 k/v cache和smoothquant
 + 对各种情况进行延时，加速比和精度的对比
 + 初赛阶段在TensorRT官方Repo提交了关了InstanceNorm Plugin的一个bug
