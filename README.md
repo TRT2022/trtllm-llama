@@ -749,7 +749,7 @@ root@0933517de088:~/workspace/tensorrt_llm_july-release-v1/examples/llama_quant#
 <img src="./assets/smoothquant1.png"/>
 </div>
 
-如上图所示，某些LLM的某些channel或某些维度的activation outlier值很多且很大(ep. GLM-130B有30%），导致量化的有效位变少，比如int8本来是-128到127，没有outlier的时候，映射到-128到127的数据分布均匀，占满了8bit位范围，精度损失很低，但是有了outlier之后，多数正常值的分布区间可能在[-20,20]或者[-10,10]，8bit位范围只利用到了5bit，甚至4bit，由此导致精度损失。上图中的activation红色橙色是outlier，outlier一般集中存在于某几个channel或axis,且activation比weight更难量化，后者数据分布一般比较均匀，smoothquant的keypoints是可以把activation量化难度迁移到weight上来，把activation里面不均匀的分布用weight中和一下，具体来讲，主要是在fp32阶段做的，保证一个等式的等价， $X$ 为输入activation， $W$ 为weight，$s$ 为因子，通过 $s$ 来中和
+如上图所示，某些LLM的某些channel或某些维度的activation outlier值很多且很大(ep. GLM-130B有30%），导致量化的有效位变少，比如int8本来是-128到127，没有outlier的时候，映射到-128到127的数据分布均匀，占满了8bit位范围，精度损失很低，但是有了outlier之后，多数正常值的分布区间可能在[-20,20]或者[-10,10]，8bit位范围只利用到了5bit，甚至4bit，由此导致精度损失。上图中的activation红色橙色是outlier，outlier一般集中存在于某几个channel或axis,且activation比weight更难量化，后者数据分布一般比较均匀，smoothquant的keypoints是可以把activation量化难度迁移到weight上来，把activation里面不均匀的分布用weight中和一下，具体来讲，主要是在fp32阶段做的，保证一个等式的等价, $X$ 为输入activation, $W$ 为weight, $s$ 为因子，通过 $s$ 来中和
 $$Y=(Xdiag(s)^{-1}.(diag(s)W))=\hat{X}\hat{W}$$
 直观的理解如下图所示：
 <div align=center>
