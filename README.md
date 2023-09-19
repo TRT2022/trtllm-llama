@@ -44,7 +44,7 @@
 
 首先是LLaMA模型的相关介绍，[LLaMA](https://github.com/facebookresearch/llama) 是目前为止，效果最好的开源 LLM 之一,数据集层面上共有1.4T的Tokens, tokenizer使用byte pair encoding (BPE) 算法，Sentence-Piece的实现,所有数字被拆分为单独的digit，所有未知的UTF-8 字符，回退到字节来进行分解。因此，LLaMA 可以通过byte 的方式，构造出很多不在 vocab 中的字符，从而也具有较好的多语言能力。网络结构上的改进基于Transformer的架构，并做了如下3点改进：
 + Pre-Normalization：为了提高训练的稳定性，对每个transformer层的输入进行归一化，而不是输出进行归一化（使用 RMS Norm 归一化函数）
-+ SwiGLU：使用SwiGLU替代了ReLU作为激活函数。和PaLM中不同，维度采用 $\frac{2}{3}4d$ 而不是$4d$  
++ SwiGLU：使用SwiGLU替代了ReLU作为激活函数。和PaLM中不同，维度采用 $\frac{2}{3}4d$ 而不是 $4d$  
 + RoPE：采用旋转位置编码，使得大模型的生成有更好的外推性
 
 LLaMA-7B有32个这样的transformer block构成，LLaMA-13B 优于 GPT-3，尽管只有1/10大小。 LLaMA-65B 是可以与 Chinchilla-70B 和 PaLM-540B 这种最佳的LLM相竞争的模型。经过微调之后，LLaMA的效果有显著的提升。关于LLaMA的介绍，推荐知乎文章：
@@ -494,7 +494,7 @@ llama-hf-run (mean latency: 1.7185083055496215 sec)
 <img src="./assets/kv_cache_fp16/matrix_multiply_0.png"/>
 </div>
 
-可以看到在FP16下，attention plugin的latency为$13.576\mu s$,k/v cache的latency为$925.928\mu s$,带权重的矩阵乘的latency为$45.922\mu s$
+可以看到在FP16下，attention plugin的latency为 $13.576\mu s$ ,k/v cache的latency为 $925.928\mu s$ ,带权重的矩阵乘的latency为 $45.922\mu s$ 
 
 2. 添加: k/v cache + attention_plugin + weight_only_quant
 
@@ -536,7 +536,7 @@ llama-run (mean latency: 0.7849386262893677 sec)
 <img src="./assets/weight_only_quant/matmul.png"/>
 </div>
 
-可以看到在weight only quant下，attention plugin的latency为$17.837\mu s$,带权重的矩阵乘的latency为$7.107\mu s$。对比上述FP16的情况有明显的加速效果。
+可以看到在weight only quant下，attention plugin的latency为 $17.837\mu s$ ,带权重的矩阵乘的latency为 $7.107\mu s$ 。对比上述FP16的情况有明显的加速效果。
 
 
 3. 添加: k/v cache + attention plugin + weight_only_quant + gemm plugin
@@ -583,7 +583,7 @@ llama-run (mean latency: 0.7930449199676514 sec)
 <img src="./assets/gemm/gemm_5.png"/>
 </div>
 
-可以明显看到替换gemm plugin的前后变化，gemm plugin替换前的latency为$28.286\mu s$,gemm plugin替换后的latency为$26.241\mu s$,有一定的加速效果。
+可以明显看到替换gemm plugin的前后变化，gemm plugin替换前的latency为 $28.286\mu s$ ,gemm plugin替换后的latency为 $26.241\mu s$ ,有一定的加速效果。
 
 4. int4 weight only quant
 
@@ -629,7 +629,7 @@ llama-run (mean latency: 0.48769086837768555 sec)
 <img src="./assets/int4/kvcache.png"/>
 </div>
 
-可以看到在int4下，attention plugin的latency为$11.609\mu s$,K/V cache的latency为$159.717\mu s$
+可以看到在int4下，attention plugin的latency为 $11.609\mu s$ ,K/V cache的latency为 $159.717\mu s$ 
 
 综上基于上述分析结果，总结如下：
 <div align=center>
@@ -749,14 +749,14 @@ root@0933517de088:~/workspace/tensorrt_llm_july-release-v1/examples/llama_quant#
 <img src="./assets/smoothquant1.png"/>
 </div>
 
-如上图所示，某些LLM的某些channel或某些维度的activation outlier值很多且很大(ep. GLM-130B有30%），导致量化的有效位变少，比如int8本来是-128到127，没有outlier的时候，映射到-128到127的数据分布均匀，占满了8bit位范围，精度损失很低，但是有了outlier之后，多数正常值的分布区间可能在[-20,20]或者[-10,10]，8bit位范围只利用到了5bit，甚至4bit，由此导致精度损失。上图中的activation红色橙色是outlier，outlier一般集中存在于某几个channel或axis,且activation比weight更难量化，后者数据分布一般比较均匀，smoothquant的keypoints是可以把activation量化难度迁移到weight上来，把activation里面不均匀的分布用weight中和一下，具体来讲，主要是在fp32阶段做的，保证一个等式的等价，$X$为输入activation，$W$为weight，$s$为因子，通过$s$来中和
+如上图所示，某些LLM的某些channel或某些维度的activation outlier值很多且很大(ep. GLM-130B有30%），导致量化的有效位变少，比如int8本来是-128到127，没有outlier的时候，映射到-128到127的数据分布均匀，占满了8bit位范围，精度损失很低，但是有了outlier之后，多数正常值的分布区间可能在[-20,20]或者[-10,10]，8bit位范围只利用到了5bit，甚至4bit，由此导致精度损失。上图中的activation红色橙色是outlier，outlier一般集中存在于某几个channel或axis,且activation比weight更难量化，后者数据分布一般比较均匀，smoothquant的keypoints是可以把activation量化难度迁移到weight上来，把activation里面不均匀的分布用weight中和一下，具体来讲，主要是在fp32阶段做的，保证一个等式的等价， $X$ 为输入activation， $W$ 为weight，$s$ 为因子，通过 $s$ 来中和
 $$Y=(Xdiag(s)^{-1}.(diag(s)W))=\hat{X}\hat{W}$$
 直观的理解如下图所示：
 <div align=center>
 <img src="./assets/smoothquant2.png"/>
 </div>
 
-左边为smooth前，右边为smooth后，可以明显看到X乘以$s^{-1}$之后数据分布明显均匀了，把难度匀了一点给weight。
+左边为smooth前，右边为smooth后，可以明显看到X乘以 $s^{-1}$ 之后数据分布明显均匀了，把难度匀了一点给weight。
 
 `examples/llama`暂不支持smoothquant，这里我们实现了`examples/llama`的smoothquant，并将其存放在`examples/llama_quant`项目中
 
