@@ -890,7 +890,7 @@ Docker镜像:
 |model|trick|max input length|output length| beam size|total latency(s)|speedup|
 |-|-|-|-|-|-|-|
 | HF Model|FP16|923|100|1|78.228|1.000|
-| TRT Model|K/V cache++Attention Plugin(FP16)|923|100|1|66.031|1.185|
+| TRT Model|K/V cache+Attention Plugin(FP16)|923|100|1|66.031|1.185|
 | TRT Model|+Weight Only Quant(int8)|923|100|1|40.297|1.941|
 | TRT Model|+Gemm Plugin(int8)|923|100|1|41.237|1.897|
 | TRT Model|+Weight Only Quant(int4)|923|100|1|28.596|2.736|
@@ -906,7 +906,7 @@ Docker镜像:
 |model|trick|max input length|output length| beam size|rouge1 (abs-error)|rouge2(abs-error)|rougeL (abs-error)|rougeLsum (abs-error)|
 |-|-|-|-|-|-|-|-|-|
 | HF Model|FP16|923|100|1|20.106 (0.000)|5.910 (0.000)|15.226 (0.000)|17.938 (0.000)|
-| TRT Model|K/V cache++Attention Plugin(FP16)|923|100|1|18.360 (1.746)|5.591 (0.319)|13.704 (1.522)|16.843 (1.095)|
+| TRT Model|K/V cache+Attention Plugin(FP16)|923|100|1|18.360 (1.746)|5.591 (0.319)|13.704 (1.522)|16.843 (1.095)|
 | TRT Model|+Weight Only Quant(int8)|923|100|1|20.065 (0.041)|6.267 (0.357)|15.433 (0.207)|18.047 (0.109)|
 | TRT Model|+Gemm Plugin(int8)|923|100|1|19.881 (0.225)|5.604 (0.306)|14.532 (0.694)|17.530 (0.408)|
 | TRT Model|+Weight Only Quant(int4)|923|100|1|18.633 (1.473)|5.434 (0.476)|14.134 (1.092)|16.316 (1.622)|
