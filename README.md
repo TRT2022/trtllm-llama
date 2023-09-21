@@ -275,10 +275,11 @@ nsys profile -o trt_llm__int4 python3 run.py --max_output_len=50 \
 
 ```shell
 cd /root/workspace/tensorrt_llm_july-release-v1/examples/llama_quant
+cp -r ../llama/tmp ./
 
 #-----------int8 k/v cache---------------
 # HF model 转 FT model support int8 k/v cache
-python3 hf_llama_convert.py -i tmp/llama/7B \
+python3 hf_llama_convert.py -i ./tmp/llama/7B \
                             -o ./c-model/llama \
                             --tensor-parallelism 1  \
                             --storage-type float16  \
@@ -671,6 +672,7 @@ int8 k/v cache本质和weight only quant一样，在模型generation phase读取
 
 ```shell
 cd tensorrt_llm_july-release-v1/examples/llama_quant
+cp -r ../llama/tmp ./
 
 python3 hf_llama_convert.py -i tmp/llama/7B \
                             -o ./c-model/llama \
