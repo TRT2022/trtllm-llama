@@ -926,7 +926,7 @@ Docker镜像:
 
 |:bug: Bug名称|Issue|是否被官方确认|说明|
 |-|-|:-:|-|
-|InstanceNormalization Plugin |<https://github.com/NVIDIA/TensorRT/issues/3165>||初赛时提交到TensorRT，导师已经确认|
+|InstanceNormalization Plugin |<https://github.com/NVIDIA/TensorRT/issues/3165>|✔️|初赛时提交到TensorRT，导师已经确认|
 
 </div>
 
