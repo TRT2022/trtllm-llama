@@ -12,6 +12,8 @@
 [![](https://img.shields.io/badge/Github-LLaMA-blue)](https://github.com/facebookresearch/llama)
 
 
+**[TensorRT-LLM: https://github.com/NVIDIA/TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)**
+
 :alien: : **美迪康-北航AI Lab** 
 
 ### 0.⏳日志
